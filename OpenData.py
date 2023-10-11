@@ -88,14 +88,16 @@ if test != -1j:
     raise Exception("Not equal to -1j")
 
 transmited_pilot = 0.707 + 0.707j
-Sigma = np.full(200, None, dtype=np.complex128) # We kunnen dit denk ik beter initialiseren
+Sigma_n = np.full(200, None, dtype=np.complex128)
+Sigma_prev = np.full(200, None, dtype=np.complex128) # We kunnen dit denk ik beter initialiseren
 A = np.zeros((7,200), dtype=np.complex128) # Wat is P ten opzichte van Sigma -> A?
 C = np.zeros((7,200), dtype=np.complex128)
 M_n = np.zeros((7,200), dtype=np.complex128)
 lambda_ = np.zeros((7,200), dtype=np.complex128)
 K = np.zeros((7,200), dtype=np.complex128)
+xn = np.zeros((7,200), dtype=np.complex128)
 # variance_Z = np.zeros((7,200), dtype=np.complex128)
-a = 0.9999
+a = 0.5
 
 print("transmited pilot", transmited_pilot)
 h = np.zeros((7,200), dtype=np.complex128)
@@ -103,27 +105,40 @@ h = np.zeros((7,200), dtype=np.complex128)
 ####
 auto_correlation = np.cov((pilot_symbols), dtype=np.complex128)
 ####
-
+y = 0.707 + 0.707j
 
 for subchannel in pilot_symbols.T:
-    t = 0
     a = -a
     C = a
     variance_w = 0 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
-    auto_correlation = np.correlate(subchannel, subchannel, mode='full')[:7]
+    auto_correlation = np.correlate(subchannel, subchannel, mode='full')[:7] # By equation from paper
     Sigma_prev = (auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0]
-    xn_prev = np.zeros((7,))
-    g = 1
-    print(np.array([a]).shape, np.array([Sigma_prev]).shape, np.array([a]).conjugate().shape)
-    # M_n = np.dot(np.dot(C, Sigma_prev), C.conjugate()) + np.dot(g,g.conjugate())
-    M_n = np.dot(np.dot(C, Sigma_prev), C) + 1
-    lambda_ = np.dot(np.dot(subchannel[t], M_n), subchannel[t]) + variance_w
-    K = np.dot(M_n, subchannel[t]) / lambda_
-    xn = np.dot(C, xn_prev)
+    Sigma_prev = 10
+    xn_prev = 0
+    g = 1 # Not correct yet?
+    for t in range(0, len(subchannel)):
+        M_n[t] = np.dot(np.dot(C, Sigma_prev), np.conjugate(C)) + 1
+        lambda_[t] = np.dot(np.dot(y, M_n[t]), np.conjugate(y)) + variance_w
+        K[t] = np.dot(M_n[t], np.conjugate(y)) / lambda_[t]
+        xn[t] = np.dot(C, xn_prev) + np.dot(K[t], (subchannel[t] - (np.dot(np.dot(y,C), xn_prev))))
+        Sigma_n[t] = np.dot((1- np.dot(K[t], y)), M_n[t])
+        xn_prev = xn[t]
+        Sigma_prev = Sigma_n[t]
 
+    fig, axs = plt.subplots(6)
+    axs[0].plot(K)
+    axs[1].plot(M_n)
+    axs[2].plot(lambda_)
+    axs[3].plot(Sigma_n)
+    axs[4].plot(Sigma_prev)
+    axs[5].plot(xn)
+
+    plt.show()
 
     break
-
+# plt.imshow(np.abs(h))
+# plt.colorbar()
+# plt.show()
 
 
 
