@@ -66,9 +66,9 @@ def extract_all_symbols(freq_domain_signals, matfile):
         symbols.append(symbol)
     return np.array(symbols), c
 
-matfile = scipy.io.loadmat('./DataSet_OFDM/New_DataSet/DataSet1.mat')
+matfile = scipy.io.loadmat('./DataSet_OFDM/New_DataSet/DataSet2.mat')
 
-No_Noise_signal = matfile['HighNoise_RxSignal']
+No_Noise_signal = matfile['NoNoise_RxSignal']
 
 # matfile = scipy.io.loadmat('./DataSet_OFDM/New_DataSet/DataSet1.mat')
 #
@@ -125,18 +125,40 @@ for t, symbols_at_T in enumerate(pilot_symbols.T):
     Sigma_prev = Sigma_n[:,t]
 
 
-fig, axs = plt.subplots(6)
+fig, axs = plt.subplots(8)
 im0 = axs[0].imshow(abs(K))
 im1 = axs[1].imshow(abs(M_n))
 im2 = axs[2].imshow(abs(lambda_))
 im3 = axs[3].imshow(abs(Sigma_n))
 im4 = axs[4].imshow(abs(pilot_symbols/xn))
-im5 = axs[5].imshow(np.angle(xn))
+im5 = axs[5].imshow(np.angle(pilot_symbols/xn))
+im6 = axs[6].imshow(abs(xn))
+im7 = axs[7].imshow(np.angle(xn))
+
+axs[0].set_title('Kalman filter coefficients')
+axs[1].set_title('M_n')
+axs[2].set_title('lambda')
+axs[3].set_title('Sigma_n')
+axs[4].set_title('|pilot_symbols/xn|')
+axs[5].set_title('arg(pilot_symbols/xn)')
+axs[6].set_title('|xn|')
+axs[7].set_title('arg(xn)')
+
 fig.colorbar(im0, ax=axs[0])
 fig.colorbar(im1, ax=axs[1])
 fig.colorbar(im2, ax=axs[2])
 fig.colorbar(im3, ax=axs[3])
 fig.colorbar(im4, ax=axs[4])
+fig.colorbar(im5, ax=axs[5])
+fig.colorbar(im6, ax=axs[6])
+fig.colorbar(im7, ax=axs[7])
+
+for ax in axs:
+    ax.set_xlabel('Carrier')
+    ax.set_ylabel('Time')
+    
+plt.show()
+
 plt.show()
 
 # plt.imshow(np.abs(h))
