@@ -68,7 +68,7 @@ def extract_all_symbols(freq_domain_signals, matfile):
 
 matfile = scipy.io.loadmat('./DataSet_OFDM/New_DataSet/DataSet2.mat')
 
-No_Noise_signal = matfile['NoNoise_RxSignal']
+No_Noise_signal = matfile['HighNoise_RxSignal']
 
 # matfile = scipy.io.loadmat('./DataSet_OFDM/New_DataSet/DataSet1.mat')
 #
@@ -105,7 +105,7 @@ print("transmited pilot", transmited_pilot)
 ####
 pilot = 0.707 + 0.707j
 
-variance_w = 0.01 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
+variance_w = 0.1 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
 T, fd = (2048+160)/30720000, 50
 auto_correlation = [j0(2*np.pi*fd * 0 * T), j0(2*np.pi*fd * 1 *T)] # By equation from paper
 Sigma_prev = np.full((200),(auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0])
