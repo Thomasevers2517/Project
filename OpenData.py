@@ -99,68 +99,102 @@ lambda_ = np.zeros((7,200), dtype=np.complex128)
 K = np.zeros((7,200), dtype=np.complex128)
 xn = np.zeros((7,200), dtype=np.complex128)
 # variance_Z = np.zeros((7,200), dtype=np.complex128)
-a = 0.5
+
 
 print("transmited pilot", transmited_pilot)
-h = np.zeros((7,200), dtype=np.complex128)
 ####
 pilot = 0.707 + 0.707j
+
+variance_w = 0.01 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
+T, fd = (2048+160)/30720000, 50
+auto_correlation = [j0(2*np.pi*fd * 0 * T), j0(2*np.pi*fd * 1 *T)] # By equation from paper
+Sigma_prev = np.full((200),(auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0])
+
+a = auto_correlation[1] / auto_correlation[0]
 a = -a
 C = a
-variance_w = 0 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
-T, fd = 0.01, 100
-auto_correlation = [j0(2*np.pi*fd * 0 * T), j0(2*np.pi*fd * 1 *T)] # By equation from paper
-Sigma_prev = (auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0]
-xn_prev = 1
+
+print("Sigma_prev", Sigma_prev)
+
+xn_prev = np.full((200) ,0)
 g = 1 # Not correct yet?
 
-for t, symbols_at_T in enumerate(pilot_symbols.T):
+for t, symbols_at_T in enumerate(pilot_symbols):
     
-    M_n[:,t] = C * Sigma_prev * np.conjugate(C) + 1
-    lambda_[:,t] = pilot * M_n[:,t] * np.conjugate(pilot) + variance_w
-    K[:,t] = M_n[:,t] * np.conjugate(pilot) / lambda_[:,t]
-    xn[:,t] = C*xn_prev + K[:,t] * (symbols_at_T - pilot*C* xn_prev)
-    Sigma_n[:,t] = (1- K[:,t] * pilot) * M_n[:,t]
-    xn_prev = xn[:,t]
-    Sigma_prev = Sigma_n[:,t]
+    M_n[t,:] = C * Sigma_prev * np.conjugate(C) + 1
+    if M_n[t,:].shape != (200,):
+        raise Exception(f"M_N at T: {M_n[t,:].shape}")
+    
+    lambda_[t,:] = pilot * M_n[t,:] * np.conjugate(pilot) + variance_w
+
+    K[t,:] = M_n[t,:] * np.conjugate(pilot) / lambda_[t,:]
+
+    if symbols_at_T.shape != (200,):
+        raise Exception(f"Symbols at T: {symbols_at_T.shape}")
+    
+    xn[t,:] = C*xn_prev + K[t,:] * (symbols_at_T - pilot*C* xn_prev)
+    Sigma_n[t,:] = (1- K[t,:] * pilot) * M_n[t,:]
+    xn_prev = xn[t,:]
+    Sigma_prev = Sigma_n[t,:]
 
 
-fig, axs = plt.subplots(8)
-im0 = axs[0].imshow(abs(K))
-im1 = axs[1].imshow(abs(M_n))
-im2 = axs[2].imshow(abs(lambda_))
-im3 = axs[3].imshow(abs(Sigma_n))
-im4 = axs[4].imshow(abs(pilot_symbols/xn))
-im5 = axs[5].imshow(np.angle(pilot_symbols/xn))
-im6 = axs[6].imshow(abs(xn))
-im7 = axs[7].imshow(np.angle(xn))
+print("M_n", M_n[0,:])
+print("lambda_", lambda_[0,:])
+print("K", K[0,:])
+print("xn", xn[0,:])
+print("Sigma_n", Sigma_n[0,:])
+fig_1, axs_1 = plt.subplots(4, figsize=(10, 8))
+im0 = axs_1[0].imshow(abs(K), aspect='auto')
+im1 = axs_1[1].imshow(abs(M_n), aspect='auto')
+im2 = axs_1[2].imshow(abs(lambda_), aspect='auto')
+im3 = axs_1[3].imshow(abs(Sigma_n), aspect='auto')
 
-axs[0].set_title('Kalman filter coefficients')
-axs[1].set_title('M_n')
-axs[2].set_title('lambda')
-axs[3].set_title('Sigma_n')
-axs[4].set_title('|pilot_symbols/xn|')
-axs[5].set_title('arg(pilot_symbols/xn)')
-axs[6].set_title('|xn|')
-axs[7].set_title('arg(xn)')
+axs_1[0].set_title('Kalman filter coefficients')
+axs_1[1].set_title('M_n')
+axs_1[2].set_title('lambda')
+axs_1[3].set_title('Sigma_n')
+fig_1.colorbar(im0, ax=axs_1[0], shrink=0.8)
+fig_1.colorbar(im1, ax=axs_1[1], shrink=0.8)
+fig_1.colorbar(im2, ax=axs_1[2], shrink=0.8)
+fig_1.colorbar(im3, ax=axs_1[3], shrink=0.8)
 
-fig.colorbar(im0, ax=axs[0])
-fig.colorbar(im1, ax=axs[1])
-fig.colorbar(im2, ax=axs[2])
-fig.colorbar(im3, ax=axs[3])
-fig.colorbar(im4, ax=axs[4])
-fig.colorbar(im5, ax=axs[5])
-fig.colorbar(im6, ax=axs[6])
-fig.colorbar(im7, ax=axs[7])
+fig_2, axs_2 = plt.subplots(3,3, figsize=(10, 8))
 
-for ax in axs:
-    ax.set_xlabel('Carrier')
+im4 = axs_2[0, 0].imshow(abs(data_symbols[:,::5]/xn[:]), aspect='auto')
+im5 = axs_2[1, 0].imshow(np.angle(data_symbols[:,::5]/xn[ :]))
+im6 = axs_2[2, 0].imshow(abs(xn), aspect='auto')
+im7 = axs_2[0, 1].imshow(np.angle(xn), aspect='auto')
+im8 = axs_2[1, 1].imshow(abs(data_symbols), aspect='auto' )
+im9 = axs_2[2, 1].imshow(np.angle(data_symbols), aspect='auto')
+im10 = axs_2[0, 2].imshow(abs(pilot_symbols), aspect='auto')
+im11 = axs_2[1, 2].imshow(np.angle(pilot_symbols), aspect='auto')
+
+axs_2[0, 0].set_title('|data_symbols[:,::5]/xn[:]|')
+axs_2[1, 0].set_title('arg(data_symbols[:,::5]/xn[:])')
+axs_2[2, 0].set_title('|xn|')
+axs_2[0, 1].set_title('arg(xn)')
+axs_2[1, 1].set_title('|data_symbols|')
+axs_2[2, 1].set_title('arg(data_symbols)')
+axs_2[0, 2].set_title('|pilot_symbols|')
+axs_2[1, 2].set_title('arg(pilot_symbols)')
+
+fig_2.colorbar(im4, ax=axs_2[0, 0], shrink=0.8, aspect=40)
+fig_2.colorbar(im5, ax=axs_2[1, 0], shrink=0.8, aspect=40)
+fig_2.colorbar(im6, ax=axs_2[2, 0], shrink=0.8, aspect=40)
+fig_2.colorbar(im7, ax=axs_2[0, 1], shrink=0.8, aspect=40)
+fig_2.colorbar(im8, ax=axs_2[1, 1], shrink=0.8, aspect=40)
+fig_2.colorbar(im9, ax=axs_2[2, 1], shrink=0.8, aspect=40)
+fig_2.colorbar(im10, ax=axs_2[0, 2], shrink=0.8, aspect=40)
+fig_2.colorbar(im11, ax=axs_2[1, 2], shrink=0.8, aspect=40)
+
+for ax in axs_1.flat:
+
     ax.set_ylabel('Time')
-    
-plt.show()
+    ax.set_ylim([0, data_symbols.shape[0]])
+
+for ax in axs_2.flat:
+   
+    ax.set_ylabel('Time')
+    ax.set_ylim([0, data_symbols.shape[0]])
 
 plt.show()
-
-# plt.imshow(np.abs(h))
-# plt.colorbar()
-# plt.show()
