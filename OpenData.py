@@ -1,7 +1,9 @@
+import cmath 
 import scipy.io
 import numpy as np
 # from Kalman import KalmanFilter_all_pilots
 import matplotlib.pyplot as plt
+from scipy.special import j0
 
 def find_prefix(sequence, subseq_length):
     cyclic_prefix = dict(prefix_start = [], reoccurence = [])
@@ -64,9 +66,9 @@ def extract_all_symbols(freq_domain_signals, matfile):
         symbols.append(symbol)
     return np.array(symbols), c
 
-matfile = scipy.io.loadmat('../DataSet_OFDM/New_DataSet/DataSet1.mat')
+matfile = scipy.io.loadmat('./DataSet_OFDM/New_DataSet/DataSet1.mat')
 
-No_Noise_signal = matfile['NoNoise_RxSignal']
+No_Noise_signal = matfile['HighNoise_RxSignal']
 
 # matfile = scipy.io.loadmat('./DataSet_OFDM/New_DataSet/DataSet1.mat')
 #
@@ -88,8 +90,8 @@ if test != -1j:
     raise Exception("Not equal to -1j")
 
 transmited_pilot = 0.707 + 0.707j
-Sigma_n = np.full(200, None, dtype=np.complex128)
-Sigma_prev = np.full(200, None, dtype=np.complex128) # We kunnen dit denk ik beter initialiseren
+Sigma_n = np.zeros((7,200), dtype=np.complex128)
+Sigma_prev = np.zeros(200, dtype=np.complex128) # We kunnen dit denk ik beter initialiseren
 A = np.zeros((7,200), dtype=np.complex128) # Wat is P ten opzichte van Sigma -> A?
 C = np.zeros((7,200), dtype=np.complex128)
 M_n = np.zeros((7,200), dtype=np.complex128)
@@ -101,118 +103,42 @@ a = 0.5
 
 print("transmited pilot", transmited_pilot)
 h = np.zeros((7,200), dtype=np.complex128)
-# auto_correlation = np.zeros((7-1,200), dtype=np.complex128)
 ####
-auto_correlation = np.cov((pilot_symbols), dtype=np.complex128)
-####
-y = 0.707 + 0.707j
+pilot = 0.707 + 0.707j
+a = -a
+C = a
+variance_w = 0 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
+T, fd = 0.01, 100
+auto_correlation = [j0(2*np.pi*fd * 0 * T), j0(2*np.pi*fd * 1 *T)] # By equation from paper
+Sigma_prev = (auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0]
+xn_prev = 1
+g = 1 # Not correct yet?
 
-for subchannel in pilot_symbols.T:
-    a = -a
-    C = a
-    variance_w = 0 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
-    auto_correlation = np.correlate(subchannel, subchannel, mode='full')[:7] # By equation from paper
-    Sigma_prev = (auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0]
-    Sigma_prev = 10
-    xn_prev = 0
-    g = 1 # Not correct yet?
-    for t in range(0, len(subchannel)):
-        M_n[t] = np.dot(np.dot(C, Sigma_prev), np.conjugate(C)) + 1
-        lambda_[t] = np.dot(np.dot(y, M_n[t]), np.conjugate(y)) + variance_w
-        K[t] = np.dot(M_n[t], np.conjugate(y)) / lambda_[t]
-        xn[t] = np.dot(C, xn_prev) + np.dot(K[t], (subchannel[t] - (np.dot(np.dot(y,C), xn_prev))))
-        Sigma_n[t] = np.dot((1- np.dot(K[t], y)), M_n[t])
-        xn_prev = xn[t]
-        Sigma_prev = Sigma_n[t]
+for t, symbols_at_T in enumerate(pilot_symbols.T):
+    
+    M_n[:,t] = C * Sigma_prev * np.conjugate(C) + 1
+    lambda_[:,t] = pilot * M_n[:,t] * np.conjugate(pilot) + variance_w
+    K[:,t] = M_n[:,t] * np.conjugate(pilot) / lambda_[:,t]
+    xn[:,t] = C*xn_prev + K[:,t] * (symbols_at_T - pilot*C* xn_prev)
+    Sigma_n[:,t] = (1- K[:,t] * pilot) * M_n[:,t]
+    xn_prev = xn[:,t]
+    Sigma_prev = Sigma_n[:,t]
 
-    fig, axs = plt.subplots(6)
-    axs[0].plot(K)
-    axs[1].plot(M_n)
-    axs[2].plot(lambda_)
-    axs[3].plot(Sigma_n)
-    axs[4].plot(Sigma_prev)
-    axs[5].plot(xn)
 
-    plt.show()
+fig, axs = plt.subplots(6)
+im0 = axs[0].imshow(abs(K))
+im1 = axs[1].imshow(abs(M_n))
+im2 = axs[2].imshow(abs(lambda_))
+im3 = axs[3].imshow(abs(Sigma_n))
+im4 = axs[4].imshow(abs(pilot_symbols/xn))
+im5 = axs[5].imshow(np.angle(xn))
+fig.colorbar(im0, ax=axs[0])
+fig.colorbar(im1, ax=axs[1])
+fig.colorbar(im2, ax=axs[2])
+fig.colorbar(im3, ax=axs[3])
+fig.colorbar(im4, ax=axs[4])
+plt.show()
 
-    break
 # plt.imshow(np.abs(h))
 # plt.colorbar()
 # plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#
-# # for t, pilot_symbols_at_T in enumerate(pilot_symbols):
-# """Ik denk als we dit omschrijven naar matrices dat het leesbaarder wordt en beter te handelen. Lekker bezig """
-# for t, pilot_symbols_at_T in enumerate(all_symbols):
-#     if t < 2:
-#         h[t] = pilot_symbols_at_T / transmited_pilot # Deze snap ik ook niet.
-#     else:
-#         for j in range(h.shape[1]):
-#             subchannel_h = h[:, j]
-#             if j ==123:
-#                 print(f"subchannel_h 123: \n, {subchannel_h[0:t]}")
-#                 print(F"Type subchannel 123: {type(subchannel_h[0])}")
-#             if subchannel_h.shape[0] > 7:
-#                 raise Exception("Subchannel length is more than 7")
-#             auto_correlation[:t, j] = np.correlate(subchannel_h[0:t], subchannel_h[0:t], mode='full')[:len(subchannel_h[0:t])] # Correlate is wat anders dan covariance toch? Misschien die formule uit de paper toepassen
-#         if t==6:
-#             print(f"auto correlation 123: \n {auto_correlation[:,123]} \n auto corr 195:  \n {auto_correlation[:,195]}") # for 3 subchannels, print the autocorrelation for K>7
-#         P[t] = auto_correlation[1]/auto_correlation[0] # Deze snap ik ook niet helemaal. Is P niet 0.99*h[t-1]
-#         variance_Z[t] = (auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0] # Deze wordt niet weer gebruikt, wat bedoelde je hiermee?
-#         if Sigma[0] == None:
-#             Sigma = auto_correlation[0]
-#         C[t] = -P[t] # C[t] snap ik hier niet helemaal. Dit is toch de transition matrix
-#         M_n[t] = C[t] * Sigma * np.conj(C[t]) + 1
-#         variance_omega = 0 # noise variance
-#         lambda_[t] =  transmited_pilot * M_n[t] * np.conj(transmited_pilot) + variance_omega
-#         K[t] = M_n[t] * transmited_pilot / lambda_[t] # geen / maar inverse
-#         h[t] = C[t] * h[t-1] + K[t] *(pilot_symbols_at_T - transmited_pilot  * h[t-1]) # Volgens mij moet hier niet transmited_pilot toch?
-#
-#         h[t] = 0.5*h[t-1] + 0.5 * pilot_symbols_at_T / transmited_pilot # Hier ben ik een beetje lost
-#         Sigma = (1-K[t]*transmited_pilot) * M_n[t] # M_n[t-1] ipv M_n[t]
-#
-#
-# print(h[0][pilot_indices[0][0][0]-425] * all_symbols[0][pilot_indices[0][0][0]-425])
-# plt.imshow(np.abs(h))
-# plt.colorbar()
-# plt.show()
-        # h_minus = P * h[-1] + Z
-
-# frequency_domain_signals = to_frequency_domain_subsequences(No_Noise_signal)
-# pilot_symbols, pilot_indices = extract_pilot_symbols(frequency_domain_signals, matfile)
-# data_symbols, data_indices = extract_data_symbols(frequency_domain_signals, matfile)
-
-#
-# print(all_symbols.shape)
-# Kalman, real_symbols, imaginary_symbols = filter_sequence(all_symbols)
-# retrieved_data = retrieve_data_symbols(real_symbols, imaginary_symbols)
-# print(retrieved_data.shape)
-# print(retrieved_data[:, pilot_indices[0][0][0]-425])
