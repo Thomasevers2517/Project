@@ -1,3 +1,6 @@
+import numpy as np
+from scipy.special import j0
+import matplotlib.pyplot as plt
 
 def One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=True):
     sigma_t = 25 # Check max delay spread late
@@ -56,7 +59,7 @@ def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True
     a = -a
     C = a
 
-    print("Sigma_prev", Sigma_prev)
+    # print("Sigma_prev", Sigma_prev)
 
     xn_prev = np.full((200) ,0)
     g = 1 # Not correct yet?
@@ -80,11 +83,11 @@ def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True
         Sigma_prev = Sigma_n[t,:]
 
 
-    print("M_n", M_n[0,:])
-    print("lambda_", lambda_[0,:])
-    print("K", K[0,:])
-    print("xn", xn[0,:])
-    print("Sigma_n", Sigma_n[0,:])
+    # print("M_n", M_n[0,:])
+    # print("lambda_", lambda_[0,:])
+    # print("K", K[0,:])
+    # print("xn", xn[0,:])
+    # print("Sigma_n", Sigma_n[0,:])
     if plot:
         plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, xn, kalman='per_channel')
     return xn
@@ -107,7 +110,7 @@ def plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hn, kalm
 
     fig_2, axs_2 = plt.subplots(3,3, figsize=(10, 8))
 
-    if kalman = 'per_channel':
+    if kalman == 'per_channel':
         im4 = axs_2[0, 0].imshow(abs(data_symbols[:,::5]/hn[:]), aspect='auto')
         im5 = axs_2[1, 0].imshow(np.angle(data_symbols[:,::5]/hn[ :]))
     else:
