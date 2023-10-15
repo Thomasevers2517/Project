@@ -2,8 +2,7 @@ import cmath
 import scipy.io
 import numpy as np
 from Kalman import One_Kalman_filter, Kalman_filter_per_channel
-import matplotlib.pyplot as plt
-from scipy.special import j0
+from Decode import ofdm_equalizer
 
 def find_prefix(sequence, subseq_length):
     cyclic_prefix = dict(prefix_start = [], reoccurence = [])
@@ -79,3 +78,5 @@ all_symbols, all_indices = extract_all_symbols(frequency_domain_signals, matfile
 
 h_n_single = Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=False)
 h_n_total = One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=False)
+
+ofdm_equalizer(h_n_single, pilot_symbols, data_symbols, data_indices, pilot_indices, plot=True)
