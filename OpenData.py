@@ -1,8 +1,9 @@
 import cmath
 import scipy.io
 import numpy as np
+import matplotlib.pyplot as plt
 from Kalman import One_Kalman_filter, Kalman_filter_per_channel
-from Decode import ofdm_equalizer
+from Decode import ofdm_equalizer, remove_zero_padding, assign_bits, flatten_pilot_symbols
 
 def find_prefix(sequence, subseq_length):
     cyclic_prefix = dict(prefix_start = [], reoccurence = [])
@@ -79,4 +80,27 @@ all_symbols, all_indices = extract_all_symbols(frequency_domain_signals, matfile
 h_n_single = Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=False)
 h_n_total = One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=False)
 
-ofdm_equalizer(h_n_single, pilot_symbols, data_symbols, data_indices, pilot_indices, plot=True)
+retrieved_data_symbols, retrieved_pilot_symbols = ofdm_equalizer(h_n_total, pilot_symbols, data_symbols, data_indices, pilot_indices, plot=False)
+retrieved_data_symbols_single, retrieved_pilot_symbols_single = ofdm_equalizer(h_n_single, pilot_symbols, data_symbols, data_indices, pilot_indices, plot=False)
+retrieved_data_symbols = remove_zero_padding(retrieved_data_symbols, data_indices, [110, 110])
+retrieved_data_symbols_single = remove_zero_padding(retrieved_data_symbols_single, data_indices, [110, 110])
+
+retrieved_pilot_symbols = flatten_pilot_symbols(retrieved_pilot_symbols)
+retrieved_pilot_symbols_single = flatten_pilot_symbols(retrieved_pilot_symbols_single)
+
+degrees_pilot = assign_bits(retrieved_pilot_symbols)
+degrees_pilot_single = assign_bits(retrieved_pilot_symbols_single)
+
+degrees_data = assign_bits(retrieved_data_symbols)
+degrees_data_single = assign_bits(retrieved_data_symbols_single)
+
+degrees_data = degrees_data.reshape(((110, 110)))
+degrees_data_single = degrees_data_single.reshape(((110, 110)))
+
+fig, (ax1, ax2) = plt.subplots(1, 2)
+fig.suptitle('retrieved images')
+ax1.imshow(degrees_data)
+ax1.set_title('Total Kalman Filter')
+ax2.imshow(degrees_data_single)
+ax2.set_title('Kalman filter per subchannel')
+plt.show()
