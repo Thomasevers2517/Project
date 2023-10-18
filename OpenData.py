@@ -77,7 +77,6 @@ data_symbols, data_indices = extract_data_symbols(frequency_domain_signals, matf
 all_symbols, all_indices = extract_all_symbols(frequency_domain_signals, matfile)
 
 h_n_single = Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True)
-h_n_single = linear_combiner(h_n_single)
 
 h_n_total = One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=False)
 

@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.special import j0
 import matplotlib.pyplot as plt
+from scipy import signal
 
 def One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=True):
     sigma_t = 25 # Check max delay spread late
@@ -51,18 +52,21 @@ def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True
     Sigma_n = np.zeros((7,200), dtype=np.complex128)
     M_n = np.zeros((7,200), dtype=np.complex128)
     auto_correlation = [j0(2*np.pi*fd * 0 * T), j0(2*np.pi*fd * 1 *T)] # By equation from paper
-    Sigma_prev = np.full((200),(auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0])
+
+    Sigma_prev = np.full((200),2000*(auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0])
+    print("Sigma_prev", Sigma_prev)
     lambda_ = np.zeros((7,200), dtype=np.complex128)
     K = np.zeros((7,200), dtype=np.complex128)
     xn = np.zeros((7,200), dtype=np.complex128)
+    errors = np.zeros((7,200), dtype=np.complex128)
     a = auto_correlation[1] / auto_correlation[0]
     a = -a
     C = a
 
     # print("Sigma_prev", Sigma_prev)
 
-    xn_prev = np.full((200) ,0)
-    g = 1 # Not correct yet?
+    xn_prev = np.full((200) ,1)
+    g = (auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0] # Not correct yet?
 
     for t, symbols_at_T in enumerate(pilot_symbols):
 
@@ -76,8 +80,9 @@ def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True
 
         if symbols_at_T.shape != (200,):
             raise Exception(f"Symbols at T: {symbols_at_T.shape}")
-
-        xn[t,:] = C*xn_prev + K[t,:] * (symbols_at_T - pilot*C* xn_prev)
+        errors[t,:] = (symbols_at_T - pilot*C* xn_prev)
+        xn[t,:] = C*xn_prev + K[t,:] * errors[t,:]
+        errors[t,:] = errors[t,:] / xn[t,:] # Normalize
         Sigma_n[t,:] = (1- K[t,:] * pilot) * M_n[t,:]
         xn_prev = xn[t,:]
         Sigma_prev = Sigma_n[t,:]
@@ -88,25 +93,29 @@ def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True
     # print("K", K[0,:])
     # print("xn", xn[0,:])
     # print("Sigma_n", Sigma_n[0,:])
+    xn = linear_combiner(xn)
     if plot:
-        plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, xn, kalman='per_channel')
+        plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, xn,  kalman='per_channel', errors=errors)
     return xn
 
-def plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hn, kalman='total'):
-    fig_1, axs_1 = plt.subplots(4, figsize=(10, 8))
+def plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hn, kalman='total', errors=None):
+    fig_1, axs_1 = plt.subplots(5, figsize=(10, 8))
     im0 = axs_1[0].imshow(abs(K), aspect='auto')
     im1 = axs_1[1].imshow(abs(M_n), aspect='auto')
     im2 = axs_1[2].imshow(abs(lambda_), aspect='auto')
     im3 = axs_1[3].imshow(abs(Sigma_n), aspect='auto')
+    im4 = axs_1[4].imshow(abs(errors), aspect='auto')
 
     axs_1[0].set_title('Kalman filter coefficients')
     axs_1[1].set_title('M_n')
     axs_1[2].set_title('lambda')
     axs_1[3].set_title('Sigma_n')
+    axs_1[4].set_title('Errors')
     fig_1.colorbar(im0, ax=axs_1[0], shrink=0.8)
     fig_1.colorbar(im1, ax=axs_1[1], shrink=0.8)
     fig_1.colorbar(im2, ax=axs_1[2], shrink=0.8)
     fig_1.colorbar(im3, ax=axs_1[3], shrink=0.8)
+    fig_1.colorbar(im4, ax=axs_1[4], shrink=0.8)
 
     fig_2, axs_2 = plt.subplots(3,3, figsize=(10, 8))
 
@@ -155,15 +164,21 @@ def plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hn, kalm
 
 def linear_combiner(hn):
     print("shape hn: ", hn.shape)
-    # Define the window size for the moving average
-    window_size = 5
+
 
     # Take a moving average over the last axis of the array
     # hn = np.concatenate((hn, np.tile(hn[:, -1:], (1, window_size/2-1))), axis=1)
-    hn = np.concatenate((np.tile(hn[:, :1], (1, window_size//2)), hn, np.tile(hn[:, -1:], (1, window_size//2))), axis=1)
-    print("shape hn: ", hn.shape)
-    hn_filtered = np.apply_along_axis(lambda x: np.convolve(x, np.ones(window_size)/window_size, mode='valid'), axis=-1, arr=hn)
+    cutoff = 0.98
+    window_size = 11
+
+    # Create the lowpass filter
+    lowpass = signal.firwin(window_size, cutoff)
+
+    hn_pad = np.concatenate((np.tile(hn[:, :1], (1, window_size//2)), hn, np.tile(hn[:, -1:], (1, window_size//2))), axis=1)
+    print("shape hn: ", hn_pad.shape)
+    hn_filtered = np.apply_along_axis(lambda x: np.convolve(x, lowpass, mode='valid'), axis=-1, arr=hn_pad)
 
     print(hn_filtered.shape)
- 
+    
+    # return hn
     return hn_filtered
