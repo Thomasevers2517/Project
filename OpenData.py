@@ -66,10 +66,9 @@ def extract_all_symbols(freq_domain_signals, matfile):
         symbols.append(symbol)
     return np.array(symbols), c
 
-matfile = scipy.io.loadmat('../DataSet_OFDM/New_DataSet/DataSet2.mat')
-
-No_Noise_signal = matfile['NoNoise_RxSignal']
-variance_w = 0 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
+matfile = scipy.io.loadmat(r"C:\Users\thoma\OneDrive - Delft University of Technology\Documenten\UNI\DSP\Project\DataSet_OFDM\New_DataSet\DataSet2.mat")
+No_Noise_signal = matfile['HighNoise_RxSignal']
+variance_w = 0.1 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
 
 
 frequency_domain_signals = to_frequency_domain_subsequences(No_Noise_signal)
@@ -77,7 +76,7 @@ pilot_symbols, pilot_indices = extract_pilot_symbols(frequency_domain_signals, m
 data_symbols, data_indices = extract_data_symbols(frequency_domain_signals, matfile)
 all_symbols, all_indices = extract_all_symbols(frequency_domain_signals, matfile)
 
-h_n_single = Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=False)
+h_n_single = Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True)
 h_n_total = One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=False)
 
 retrieved_data_symbols, retrieved_pilot_symbols = ofdm_equalizer(h_n_total, pilot_symbols, data_symbols, data_indices, pilot_indices, plot=False)
