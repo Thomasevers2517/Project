@@ -23,17 +23,18 @@ def One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=True):
         coefficient = j0(2*np.pi*fd * m * T)
         for k in range(200):
             for l in range(200):
-                rklm = coefficient * (1-2j * np.pi * (l -k)*sigma_t/T)/(1+(4 * np.pi **2) * ((l-k)**2) * (sigma_t**2)/(T**2))
+                # rklm = coefficient * (1-2j * np.pi * (l -k)*sigma_t/T)/(1+(4 * np.pi **2) * ((l-k)**2) * (sigma_t**2)/(T**2))
                 if m == 1:
-                    Sigma_prev[k,l] = rklm
+                    Sigma_prev[k,l] = coefficient
                 elif m == 0:
-                    Shifted[k,l] = rklm
-    A = np.dot(Shifted, np.linalg.inv(Sigma_prev))
+                    Shifted[k,l] = coefficient
+
+    A = np.dot(np.dot(Shifted**2, abs(Sigma_prev)**2), np.linalg.pinv(Sigma_prev))
     C = -A
     for t, symbols_at_T in enumerate(pilot_symbols):
         M_n = np.dot(np.dot(C, Sigma_prev), C.conjugate()) + np.dot(G, G.conjugate())
         lambda_ = np.dot(np.dot(D, M_n), D.conjugate()) + np.dot(variance_w**2, np.identity(200))
-        K = np.dot(np.dot(M_n, D[t].conjugate()), np.linalg.inv(lambda_))
+        K = np.dot(np.dot(M_n, D.conjugate()), np.linalg.inv(lambda_))
         xn = np.dot(C, x_prev) + np.dot(K, (symbols_at_T - np.dot(np.dot(D, C), x_prev)))
         Sigma_n = np.dot((np.identity(200) - np.dot(K, D)), M_n)
         x_prev = xn
@@ -114,8 +115,8 @@ def plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hn, kalm
         im4 = axs_2[0, 0].imshow(abs(data_symbols[:,::5]/hn[:]), aspect='auto')
         im5 = axs_2[1, 0].imshow(np.angle(data_symbols[:,::5]/hn[ :]))
     else:
-        im4 = axs_2[0, 0].imshow(abs(np.dot(data_symbols[:,::5],np.linalg.pinv(hn))))
-        im5 = axs_2[1, 0].imshow(np.angle(np.dot(data_symbols[:,::5],np.linalg.pinv(hn))))
+        im4 = axs_2[0, 0].imshow(abs(np.divide(data_symbols[:,::5],hn)))
+        im5 = axs_2[1, 0].imshow(np.angle(np.divide(data_symbols[:,::5],hn)))
     im6 = axs_2[2, 0].imshow(abs(hn), aspect='auto')
     im7 = axs_2[0, 1].imshow(np.angle(hn), aspect='auto')
     im8 = axs_2[1, 1].imshow(abs(data_symbols), aspect='auto' )
