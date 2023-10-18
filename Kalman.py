@@ -152,3 +152,18 @@ def plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hn, kalm
         ax.set_ylim([0, data_symbols.shape[0]])
 
     plt.show()
+
+def linear_combiner(hn):
+    print("shape hn: ", hn.shape)
+    # Define the window size for the moving average
+    window_size = 5
+
+    # Take a moving average over the last axis of the array
+    # hn = np.concatenate((hn, np.tile(hn[:, -1:], (1, window_size/2-1))), axis=1)
+    hn = np.concatenate((np.tile(hn[:, :1], (1, window_size//2)), hn, np.tile(hn[:, -1:], (1, window_size//2))), axis=1)
+    print("shape hn: ", hn.shape)
+    hn_filtered = np.apply_along_axis(lambda x: np.convolve(x, np.ones(window_size)/window_size, mode='valid'), axis=-1, arr=hn)
+
+    print(hn_filtered.shape)
+ 
+    return hn_filtered

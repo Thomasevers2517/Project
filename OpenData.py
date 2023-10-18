@@ -2,7 +2,7 @@ import cmath
 import scipy.io
 import numpy as np
 import matplotlib.pyplot as plt
-from Kalman import One_Kalman_filter, Kalman_filter_per_channel
+from Kalman import One_Kalman_filter, Kalman_filter_per_channel, linear_combiner, plot_filters
 from Decode import ofdm_equalizer, remove_zero_padding, assign_bits, flatten_pilot_symbols
 
 def find_prefix(sequence, subseq_length):
@@ -77,6 +77,8 @@ data_symbols, data_indices = extract_data_symbols(frequency_domain_signals, matf
 all_symbols, all_indices = extract_all_symbols(frequency_domain_signals, matfile)
 
 h_n_single = Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True)
+h_n_single = linear_combiner(h_n_single)
+
 h_n_total = One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=False)
 
 retrieved_data_symbols, retrieved_pilot_symbols = ofdm_equalizer(h_n_total, pilot_symbols, data_symbols, data_indices, pilot_indices, plot=False)
