@@ -66,8 +66,8 @@ def extract_all_symbols(freq_domain_signals, matfile):
         symbols.append(symbol)
     return np.array(symbols), c
 
-matfile = scipy.io.loadmat(r"C:\Users\thoma\OneDrive - Delft University of Technology\Documenten\UNI\DSP\Project\DataSet_OFDM\New_DataSet\DataSet2.mat")
-No_Noise_signal = matfile['HighNoise_RxSignal']
+matfile = scipy.io.loadmat("../DataSet_OFDM/New_DataSet/DataSet2.mat")
+No_Noise_signal = matfile['NoNoise_RxSignal']
 variance_w = 0.1 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
 
 

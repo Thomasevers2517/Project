@@ -6,54 +6,29 @@ import  math
 def ofdm_equalizer(hn, pilot_symbols, data_symbols, data_index, pilot_index, plot=True):
     """Zero forcing equalization: Z =Y/H: element wise division"""
     zn_pilot = np.divide(pilot_symbols, hn)
-    pilot_assignment = np.zeros((5,7,200), dtype=np.complex128).T
-    zn_data = np.zeros((5, 7, 200), dtype=np.complex128)
-    retrieved_data_symbols = np.zeros((7, 1000), dtype=np.complex128).T
-    corresponding_data_symbols = []
-    counter = 0
-    for subcarrier in pilot_index[0][0][0]:
+    retrieved_data = np.zeros((7, 1000), dtype=np.complex128)
+    for i in range(5):
+        if i >= 3:
+            pilot_assignment = data_symbols[:,i-3::5]
+            zn_data = np.divide(pilot_assignment, hn)
+            index = np.arange(i - 3,retrieved_data.shape[1], 5)
+            retrieved_data[:,index] = zn_data
 
-        # calculate the difference array
-        difference_array = np.absolute(data_index[0][0][0]-subcarrier)
-
-        # find the index of minimum element from the array
-        index = difference_array.argmin()
-        if index != 0:
-            indexed_subchannels = data_index[0][0][0][index-3:index+2]
-
-            pilot_assignment[counter] = data_symbols[:, index-3:index+2]
         else:
-            indexed_subchannels = data_index[0][0][0][index:index+2]
-            pilot_assignment[counter] = np.concatenate([np.zeros((7,3), dtype=np.complex128),data_symbols[:, index:index+2]], axis=1)
-
-        counter += 1
-    i_total = 0
-    for i in pilot_assignment.T:
-        zn_data[i_total] = np.divide(i, hn)
-        i_total += 1
-
-    initial_index = 0
-    for j in zn_data.T:
-        counter = initial_index
-        for k in j.T:
-            retrieved_data_symbols[counter] = k
-            counter += 5
-
-        initial_index += 1
-    retrieved_data_symbols = retrieved_data_symbols.T
-
+            pilot_assignment = data_symbols[:,i+2::5]
+            zn_data = np.divide(pilot_assignment, hn)
+            index = np.arange(i + 2,retrieved_data.shape[1], 5)
+            retrieved_data[:,index] = zn_data
     if plot:
-        # extract real part
-        x = [ele.real for ele in retrieved_data_symbols]
+        x = [ele.real for ele in zn_data.flatten()]
         # extract imaginary part
-        y = [ele.imag for ele in retrieved_data_symbols]
-
+        y = [ele.imag for ele in zn_data.flatten()]
         # plot the complex numbers
-        plt.scatter(x, y)
+        plt.scatter(x, y,alpha=0.5)
         plt.ylabel('Imaginary')
         plt.xlabel('Real')
         plt.show()
-    return retrieved_data_symbols, zn_pilot
+    return retrieved_data, zn_pilot
 
 
 def remove_zero_padding(retrieved_data_symbols, data_indices, image_shape):
@@ -82,24 +57,28 @@ def flatten_pilot_symbols(retrieved_pilot_sequence):
 def extract_phase(retrieved_sequence, plot=False):
     degrees=np.zeros((retrieved_sequence.shape))
     for t, symbol in enumerate(retrieved_sequence):
-        degrees[t] = math.degrees(cmath.phase(symbol))
+        # degrees[t] = math.degrees(cmath.phase(symbol))
+        degrees[t] = np.angle(symbol)
         # for k, symbol in enumerate(sequence):
         #     degrees[t, ] = math.degrees(cmath.phase(symbol))
     return degrees
 
 def assign_bits(retrieved_sequence):
     degrees = extract_phase(retrieved_sequence, plot=False)
+
+    # plt.hist(degrees)
+    # plt.show()
     bit_seq = []
     for t, k in enumerate(degrees):
         # bit_sub_seq = []
         # for k, symbol in enumerate(sequence):
-        if 0 <= k < 90:
+        if 0 <= k < np.pi / 2:
             bits = [0,0]
-        elif 90 <= k < 180:
+        elif np.pi / 2 <= k < np.pi:
             bits = [0, 1]
-        elif 180 <= k < 270:
+        elif -(np.pi/2) < k <= np.pi:
             bits = [1, 1]
-        elif 270 <= k:
+        else:
             bits = [1, 0]
         bit_seq.append(bits)
     return np.array(bit_seq)
