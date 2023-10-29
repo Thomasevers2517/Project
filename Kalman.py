@@ -122,3 +122,24 @@ def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, pilot, FF
         Sigma_prev = Sigma_n[t,:]
     # Return the channel estimation
     return xn
+
+
+def linear_combiner(hn):
+    
+    print("shape hn: ", hn.shape)
+    # Take a moving average over the last axis of the array
+    # hn = np.concatenate((hn, np.tile(hn[:, -1:], (1, window_size/2-1))), axis=1)
+    cutoff = 0.98
+    window_size = 11
+
+    # Create the lowpass filter
+    lowpass = signal.firwin(window_size, cutoff)
+
+    hn_pad = np.concatenate((np.tile(hn[:, :1], (1, window_size//2)), hn, np.tile(hn[:, -1:], (1, window_size//2))), axis=1)
+    print("shape hn: ", hn_pad.shape)
+    hn_filtered = np.apply_along_axis(lambda x: np.convolve(x, lowpass, mode='valid'), axis=-1, arr=hn_pad)
+
+    print(hn_filtered.shape)
+
+    # return hn
+    return hn_filtered
