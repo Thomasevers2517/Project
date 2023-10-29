@@ -6,10 +6,11 @@ is extracted and the corresponding bits are assigned based on the QPSK constella
 # Imports
 import numpy as np
 import matplotlib.pyplot as plt
-from Kalman import One_Kalman_filter, Kalman_filter_per_channel
+from Kalman import One_Kalman_filter, Kalman_filter_per_channel, linear_combiner
 from OpenData import to_frequency_domain_subsequences, extract_pilot_symbols, extract_data_symbols
+import time
 
-def ofdm_equalizer(hn, pilot_symbols, data_symbols):
+def ofdm_equalizer(hn, pilot_symbols, data_symbols, combiner = False):
     """This function perfoms zero forcing equalization by dividing the data symbols
     by the generated channel estimator using element wise division.
     Input:
@@ -23,6 +24,8 @@ def ofdm_equalizer(hn, pilot_symbols, data_symbols):
     zn_pilot = np.divide(pilot_symbols, hn)
     # Flatten the pilot symbols
     zn_pilot = flatten_pilot_symbols(zn_pilot)
+    if combiner:
+        hn = linear_combiner(hn)
     # Repeat the estimated channel 5 times to be able to extract the data symbols
     hn_data = np.repeat(hn, 5, axis=1)
     # Element wise division of the data symbols by the repeated channel estimator
@@ -116,7 +119,7 @@ def assign_bits(retrieved_sequence):
     # Return the list of bits as a numpy array
     return np.array(bit_seq)
 
-def extract_received_signal(signal, variance_w, pilot, Channel_length, FFT_length, matfile):
+def extract_received_signal(signal, variance_w, pilot, Channel_length, FFT_length, matfile, combiner=False):
     """This function combines all the steps to reconstruct the image based on the
     loaded sequency of the received signal.
     Input:
@@ -141,13 +144,25 @@ def extract_received_signal(signal, variance_w, pilot, Channel_length, FFT_lengt
     fd = matfile['Channel']['DopplerFreq'][0][0][0]
     sampling_freq = matfile['OFDM']['SamplingFreq'][0][0][0]
 
+    # Measure execution times
+    start_total = time.time()
     # Generate the channel estimators using either the Kalman filter per sub-channel or the total Kalman filter
     h_n_single = Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, pilot, FFT_length, Channel_length, fd, sampling_freq)
+    end_total = time.time()
+    start_single = time.time()
     h_n_total = One_Kalman_filter(pilot_symbols, variance_w, data_symbols, pilot, FFT_length, Channel_length, fd, sampling_freq)
+    end_single = time.time()
+
+    # Print the execution times
+    print("The time of execution of total Kalman filter is :",
+      (end_total-start_total) * 10**3, "ms")
+    print("The time of execution of per sub-channel Kalman filter is :",
+      (end_single-start_single) * 10**3, "ms")
 
     # Apply the channel estimation using either the Kalman filter per sub-channel or the total Kalman filter
-    retrieved_data_symbols, retrieved_pilot_symbols = ofdm_equalizer(h_n_total, pilot_symbols, data_symbols)
-    retrieved_data_symbols_single, retrieved_pilot_symbols_single = ofdm_equalizer(h_n_single, pilot_symbols, data_symbols)
+    retrieved_data_symbols, retrieved_pilot_symbols = ofdm_equalizer(h_n_total, pilot_symbols, data_symbols, combiner=False)
+    retrieved_data_symbols_single, retrieved_pilot_symbols_single = ofdm_equalizer(h_n_single, pilot_symbols, data_symbols, combiner=combiner)
+
     # Remove the zero padding of the retrieved data symbols
     retrieved_data_symbols = remove_zero_padding(retrieved_data_symbols, [110, 110])
     retrieved_data_symbols_single = remove_zero_padding(retrieved_data_symbols_single, [110, 110])
@@ -155,7 +170,6 @@ def extract_received_signal(signal, variance_w, pilot, Channel_length, FFT_lengt
     # Assign the bits of both the pilot symbols as the data symbols from the per-subchannel Kalman filter
     bits_pilot = assign_bits(retrieved_pilot_symbols)
     bits_pilot_single = assign_bits(retrieved_pilot_symbols_single)
-
     # Assign the bits of both the pilot symbols as the data symbols from the total Kalman filter
     bits_data = assign_bits(retrieved_data_symbols)
     bits_data_single = assign_bits(retrieved_data_symbols_single)
@@ -164,7 +178,7 @@ def extract_received_signal(signal, variance_w, pilot, Channel_length, FFT_lengt
     bits_data = 255 * bits_data.T.reshape(((110, 110)), order='F')
     bits_data_single = 255 * bits_data_single.T.reshape(((110, 110)), order='F')
     # Return the extracted bits
-    return bits_pilot, bits_data, bits_pilot_single, bits_data_single
+    return bits_pilot, retrieved_pilot_symbols, bits_data, bits_pilot_single, retrieved_pilot_symbols_single, bits_data_single
 
 def calculate_bit_error_rate(retrieved_bits, pilot):
     """This function calculates the Bit error rate from the retrieved pilot bits.
