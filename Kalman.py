@@ -1,183 +1,124 @@
+"""This script contains both the total Kalman filter as the Kalman filter per sub-channel.
+The filters are based on the following publication:
+KALMAN-FILTER CHANNEL ESTIMATOR FOR OFDM SYSTEMS IN TIME AND
+FREQUENCY-SELECTIVE FADING ENVIRONMENT Wei Chen and Ruifeng Zhang (2004)"""
+
+# Imports
 import numpy as np
 from scipy.special import j0
 import matplotlib.pyplot as plt
-from scipy import signal
 
-def One_Kalman_filter(pilot_symbols, variance_w, data_symbols, plot=True):
-    sigma_t = 25 # Check max delay spread late
-    pilot = 0.707 + 0.707j
-    variance_w = 0 # 0 for no noise, -25 dB for low noise and -10 dB for high noise)
-    T, fd = (2048+160)/30720000, 50
+def One_Kalman_filter(pilot_symbols, variance_w, data_symbols, pilot, FFT_length, Channel_length, fd, sampling_freq):
+    """This function defines the total Kalman filter based on the mentioned paper above.
+    Input:
+        - pilot_symbols: The received pilot symbols
+        - variance_w: The variance of the corresponding noise level of the received symbols
+        - data_symbols: The received data symbols
+        - pilot: The true pilot symbols
+        - FFT_length: The defined FFT length
+        - Channel_length: The defined channel length
+        - fd: The Doppler frequency
+        - sampling_freq: The defined sampling frequency
+    Output:
+        - hat_hn: The channel estimation """
+    # Initiate the max delay spread
+    sigma_t = 25
+    # Calculate the sample duration
+    T = (FFT_length + (Channel_length -1))/sampling_freq
 
+    # Initiate empty parameters for the Kalman filter
     Sigma_prev = np.zeros((200, 200), dtype=np.complex128)
     Shifted = np.zeros((200, 200), dtype=np.complex128)
     G = np.identity(200, dtype=np.complex128)
-    Q = np.identity(200, dtype=np.complex128)
     D = np.diag(np.full(200, pilot))
     x_prev = np.zeros((200,), dtype=np.complex128)
     M_n = np.zeros((7,200), dtype=np.complex128)
     hat_hn = np.zeros((7, 200), dtype=np.complex128)
     reshaped_data_symbols = np.zeros((7, 200, 200), dtype=np.complex128)
 
-
+    # Iterate over 0 and 1
     for m in range(2):
+        # Calculate the defined correlation coefficient
         coefficient = j0(2*np.pi*fd * m * T)
+        # Iterate over the amount of pilot symbols
         for k in range(200):
             for l in range(200):
-                # rklm = coefficient * (1-2j * np.pi * (l -k)*sigma_t/T)/(1+(4 * np.pi **2) * ((l-k)**2) * (sigma_t**2)/(T**2))
+                # Assign the corresponding coefficient
                 if m == 1:
                     Sigma_prev[k,l] = coefficient
                 elif m == 0:
                     Shifted[k,l] = coefficient
-
+    # Initiate the transition matrix
     A = np.dot(np.dot(Shifted**2, abs(Sigma_prev)**2), np.linalg.pinv(Sigma_prev))
     C = -A
+    # Iterate over the index and pilot symbol of the received pilot symbols
     for t, symbols_at_T in enumerate(pilot_symbols):
+        # Calculate the Kalman iteration as defined in the mentioned paper
         M_n = np.dot(np.dot(C, Sigma_prev), C.conjugate()) + np.dot(G, G.conjugate())
         lambda_ = np.dot(np.dot(D, M_n), D.conjugate()) + np.dot(variance_w**2, np.identity(200))
+        # Calculate the Kalman gain
         K = np.dot(np.dot(M_n, D.conjugate()), np.linalg.inv(lambda_))
+        # Calculate the updated state
         xn = np.dot(C, x_prev) + np.dot(K, (symbols_at_T - np.dot(np.dot(D, C), x_prev)))
+        # Calculate the updated Sigma matrix of the corresponding new state
         Sigma_n = np.dot((np.identity(200) - np.dot(K, D)), M_n)
+        # Set the new state and new sigma as the previous state and sigma
         x_prev = xn
         Sigma_prev = Sigma_n
+        # Create the channel estimation
         hat_hn[t] = np.dot(np.identity(200, dtype=np.complex128), xn) # Same as xn
-
-    if plot:
-        plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hat_hn)
+    # Return the channel estimation
     return hat_hn
 
 
-def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, plot=True):
-    pilot = 0.707 + 0.707j
-    T, fd = (2048+160)/30720000, 50
+def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, pilot, FFT_Length, Channel_length, fd, sampling_freq):
+    """This function defines the per sub-channel Kalman filter based on the mentioned paper above.
+    Input:
+        - pilot_symbols: The received pilot symbols
+        - variance_w: The variance of the corresponding noise level of the received symbols
+        - data_symbols: The received data symbols
+        - pilot: The true pilot symbols
+        - FFT_length: The defined FFT length
+        - Channel_length: The defined channel length
+        - fd: The Doppler frequency
+        - sampling_freq: The defined sampling frequency
+    Output:
+        - xn: The channel estimation """
+    # Calculate the sample duration
+    T = (FFT_Length+(Channel_length - 1))/sampling_freq
+    # Initiate the parameters for the Kalman filter
     Sigma_n = np.zeros((7,200), dtype=np.complex128)
     M_n = np.zeros((7,200), dtype=np.complex128)
     auto_correlation = [j0(2*np.pi*fd * 0 * T), j0(2*np.pi*fd * 1 *T)] # By equation from paper
-
-    Sigma_prev = np.full((200),2000*(auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0])
-    print("Sigma_prev", Sigma_prev)
+    Sigma_prev = np.full((200),(auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0])
     lambda_ = np.zeros((7,200), dtype=np.complex128)
     K = np.zeros((7,200), dtype=np.complex128)
     xn = np.zeros((7,200), dtype=np.complex128)
-    errors = np.zeros((7,200), dtype=np.complex128)
     a = auto_correlation[1] / auto_correlation[0]
     a = -a
     C = a
+    xn_prev = np.full((200) ,0)
+    g = 1
 
-    # print("Sigma_prev", Sigma_prev)
-
-    xn_prev = np.full((200) ,1)
-    g = (auto_correlation[0]**2 - abs(auto_correlation[1])**2) / auto_correlation[0] # Not correct yet?
-
+    # Iterate over the received pilot symbols
     for t, symbols_at_T in enumerate(pilot_symbols):
-
+        # Calculate the Kalman iteration as defined in the mentioned paper
         M_n[t,:] = C * Sigma_prev * np.conjugate(C) + 1
         if M_n[t,:].shape != (200,):
             raise Exception(f"M_N at T: {M_n[t,:].shape}")
 
         lambda_[t,:] = pilot * M_n[t,:] * np.conjugate(pilot) + variance_w
-
+        # Calculate the Kalman gain
         K[t,:] = M_n[t,:] * np.conjugate(pilot) / lambda_[t,:]
 
         if symbols_at_T.shape != (200,):
             raise Exception(f"Symbols at T: {symbols_at_T.shape}")
-        errors[t,:] = (symbols_at_T - pilot*C* xn_prev)
-        xn[t,:] = C*xn_prev + K[t,:] * errors[t,:]
-        errors[t,:] = errors[t,:] / xn[t,:] # Normalize
+        # Calculate the new state
+        xn[t,:] = C*xn_prev + K[t,:] * (symbols_at_T - pilot*C* xn_prev)
+        # Calculate the new sigma
         Sigma_n[t,:] = (1- K[t,:] * pilot) * M_n[t,:]
+        # Set the new sigma and state as the previous state and sigma
         xn_prev = xn[t,:]
         Sigma_prev = Sigma_n[t,:]
-
-
-    # print("M_n", M_n[0,:])
-    # print("lambda_", lambda_[0,:])
-    # print("K", K[0,:])
-    # print("xn", xn[0,:])
-    # print("Sigma_n", Sigma_n[0,:])
-    xn = linear_combiner(xn)
-    if plot:
-        plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, xn,  kalman='per_channel', errors=errors)
+    # Return the channel estimation
     return xn
-
-def plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hn, kalman='total', errors=None):
-    fig_1, axs_1 = plt.subplots(5, figsize=(10, 8))
-    im0 = axs_1[0].imshow(abs(K), aspect='auto')
-    im1 = axs_1[1].imshow(abs(M_n), aspect='auto')
-    im2 = axs_1[2].imshow(abs(lambda_), aspect='auto')
-    im3 = axs_1[3].imshow(abs(Sigma_n), aspect='auto')
-    im4 = axs_1[4].imshow(abs(errors), aspect='auto')
-
-    axs_1[0].set_title('Kalman filter coefficients')
-    axs_1[1].set_title('M_n')
-    axs_1[2].set_title('lambda')
-    axs_1[3].set_title('Sigma_n')
-    axs_1[4].set_title('Errors')
-    fig_1.colorbar(im0, ax=axs_1[0], shrink=0.8)
-    fig_1.colorbar(im1, ax=axs_1[1], shrink=0.8)
-    fig_1.colorbar(im2, ax=axs_1[2], shrink=0.8)
-    fig_1.colorbar(im3, ax=axs_1[3], shrink=0.8)
-    fig_1.colorbar(im4, ax=axs_1[4], shrink=0.8)
-
-    fig_2, axs_2 = plt.subplots(3,3, figsize=(10, 8))
-
-    if kalman == 'per_channel':
-        im4 = axs_2[0, 0].imshow(abs(data_symbols[:,::5]/hn[:]), aspect='auto')
-        im5 = axs_2[1, 0].imshow(np.angle(data_symbols[:,::5]/hn[ :]))
-    else:
-        im4 = axs_2[0, 0].imshow(abs(np.divide(data_symbols[:,::5],hn)))
-        im5 = axs_2[1, 0].imshow(np.angle(np.divide(data_symbols[:,::5],hn)))
-    im6 = axs_2[2, 0].imshow(abs(hn), aspect='auto')
-    im7 = axs_2[0, 1].imshow(np.angle(hn), aspect='auto')
-    im8 = axs_2[1, 1].imshow(abs(data_symbols), aspect='auto' )
-    im9 = axs_2[2, 1].imshow(np.angle(data_symbols), aspect='auto')
-    im10 = axs_2[0, 2].imshow(abs(pilot_symbols), aspect='auto')
-    im11 = axs_2[1, 2].imshow(np.angle(pilot_symbols), aspect='auto')
-
-    axs_2[0, 0].set_title('|data_symbols[:,::5]/xn[:]|')
-    axs_2[1, 0].set_title('arg(data_symbols[:,::5]/xn[:])')
-    axs_2[2, 0].set_title('|xn|')
-    axs_2[0, 1].set_title('arg(xn)')
-    axs_2[1, 1].set_title('|data_symbols|')
-    axs_2[2, 1].set_title('arg(data_symbols)')
-    axs_2[0, 2].set_title('|pilot_symbols|')
-    axs_2[1, 2].set_title('arg(pilot_symbols)')
-
-    fig_2.colorbar(im4, ax=axs_2[0, 0], shrink=0.8, aspect=40)
-    fig_2.colorbar(im5, ax=axs_2[1, 0], shrink=0.8, aspect=40)
-    fig_2.colorbar(im6, ax=axs_2[2, 0], shrink=0.8, aspect=40)
-    fig_2.colorbar(im7, ax=axs_2[0, 1], shrink=0.8, aspect=40)
-    fig_2.colorbar(im8, ax=axs_2[1, 1], shrink=0.8, aspect=40)
-    fig_2.colorbar(im9, ax=axs_2[2, 1], shrink=0.8, aspect=40)
-    fig_2.colorbar(im10, ax=axs_2[0, 2], shrink=0.8, aspect=40)
-    fig_2.colorbar(im11, ax=axs_2[1, 2], shrink=0.8, aspect=40)
-
-    for ax in axs_1.flat:
-
-        ax.set_ylabel('Time')
-        ax.set_ylim([0, data_symbols.shape[0]])
-
-    for ax in axs_2.flat:
-
-        ax.set_ylabel('Time')
-        ax.set_ylim([0, data_symbols.shape[0]])
-
-    plt.show()
-
-
-# Apply a lowpass filter to the subchannel estimates to filter out high frequency noise in the estimates
-def linear_combiner(hn):
-    # Create the lowpass filter. Parameters found to be optimal through trial and error
-    cutoff = 0.98
-    window_size = 11
-    lowpass = signal.firwin(window_size, cutoff)
-
-    # Pad the hn array with the first and last values to avoid edge effects
-    hn_pad = np.concatenate((np.tile(hn[:, :1], (1, window_size//2)), hn, np.tile(hn[:, -1:], (1, window_size//2))), axis=1)
-    print("shape hn: ", hn_pad.shape)
-    # Apply the lowpass filter to the hn array
-    hn_filtered = np.apply_along_axis(lambda x: np.convolve(x, lowpass, mode='valid'), axis=-1, arr=hn_pad)
-
-    print(hn_filtered.shape)
-    
-    # return hn
-    return hn_filtered
