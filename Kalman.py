@@ -163,20 +163,18 @@ def plot_filters(K, M_n, lambda_, Sigma_n, data_symbols, pilot_symbols, hn, kalm
 
     plt.show()
 
+
+# Apply a lowpass filter to the subchannel estimates to filter out high frequency noise in the estimates
 def linear_combiner(hn):
-    print("shape hn: ", hn.shape)
-
-
-    # Take a moving average over the last axis of the array
-    # hn = np.concatenate((hn, np.tile(hn[:, -1:], (1, window_size/2-1))), axis=1)
+    # Create the lowpass filter. Parameters found to be optimal through trial and error
     cutoff = 0.98
     window_size = 11
-
-    # Create the lowpass filter
     lowpass = signal.firwin(window_size, cutoff)
 
+    # Pad the hn array with the first and last values to avoid edge effects
     hn_pad = np.concatenate((np.tile(hn[:, :1], (1, window_size//2)), hn, np.tile(hn[:, -1:], (1, window_size//2))), axis=1)
     print("shape hn: ", hn_pad.shape)
+    # Apply the lowpass filter to the hn array
     hn_filtered = np.apply_along_axis(lambda x: np.convolve(x, lowpass, mode='valid'), axis=-1, arr=hn_pad)
 
     print(hn_filtered.shape)
