@@ -125,8 +125,13 @@ def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, pilot, FF
     return xn
 
 
-# Apply a lowpass filter to the subchannel estimates to filter out high frequency noise in the estimates
 def linear_combiner(hn):
+    """This function applies a lowpass filter to the subchannel estimates to filter out high frequency noise in the estimates  
+    Input:
+        - hn: An np array of the channel estimations per subchannel
+    Output:
+        - hn_filtered: An np array of the low pass filtered channel estimations per subchannel """
+
     # Create the lowpass filter. Parameters found to be optimal through trial and error
     cutoff = 0.98
     window_size = 11
