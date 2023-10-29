@@ -7,6 +7,7 @@ FREQUENCY-SELECTIVE FADING ENVIRONMENT Wei Chen and Ruifeng Zhang (2004)"""
 import numpy as np
 from scipy.special import j0
 import matplotlib.pyplot as plt
+from scipy import signal
 
 def One_Kalman_filter(pilot_symbols, variance_w, data_symbols, pilot, FFT_length, Channel_length, fd, sampling_freq):
     """This function defines the total Kalman filter based on the mentioned paper above.
@@ -124,22 +125,18 @@ def Kalman_filter_per_channel(pilot_symbols, variance_w, data_symbols, pilot, FF
     return xn
 
 
+# Apply a lowpass filter to the subchannel estimates to filter out high frequency noise in the estimates
 def linear_combiner(hn):
-    
-    print("shape hn: ", hn.shape)
-    # Take a moving average over the last axis of the array
-    # hn = np.concatenate((hn, np.tile(hn[:, -1:], (1, window_size/2-1))), axis=1)
+    # Create the lowpass filter. Parameters found to be optimal through trial and error
     cutoff = 0.98
     window_size = 11
-
-    # Create the lowpass filter
     lowpass = signal.firwin(window_size, cutoff)
 
+    # Pad the hn array with the first and last values to avoid edge effects
     hn_pad = np.concatenate((np.tile(hn[:, :1], (1, window_size//2)), hn, np.tile(hn[:, -1:], (1, window_size//2))), axis=1)
     print("shape hn: ", hn_pad.shape)
+    # Apply the lowpass filter to the hn array
     hn_filtered = np.apply_along_axis(lambda x: np.convolve(x, lowpass, mode='valid'), axis=-1, arr=hn_pad)
 
     print(hn_filtered.shape)
-
-    # return hn
     return hn_filtered
